@@ -1,4 +1,4 @@
-package app.cash.paparazzi.agent
+package app.cash.paparazzi
 
 import net.bytebuddy.agent.ByteBuddyAgent
 import org.assertj.core.api.Assertions.assertThat

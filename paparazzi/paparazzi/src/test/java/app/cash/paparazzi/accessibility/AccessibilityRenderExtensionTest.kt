@@ -12,10 +12,12 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.cash.paparazzi.DeviceConfig
+import app.cash.paparazzi.FrameHandler
 import app.cash.paparazzi.Paparazzi
-import app.cash.paparazzi.Snapshot
-import app.cash.paparazzi.SnapshotHandler
 import app.cash.paparazzi.internal.ImageUtils
+import app.cash.paparazzi.rule.PaparazziRule
+import app.cash.paparazzi.rule.Snapshot
+import app.cash.paparazzi.rule.SnapshotHandler
 import org.junit.Rule
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -26,31 +28,33 @@ class AccessibilityRenderExtensionTest {
   private val snapshotHandler = TestSnapshotVerifier()
 
   @get:Rule
-  val paparazzi = Paparazzi(
-    deviceConfig = DeviceConfig.NEXUS_5.copy(
-      // Needed to render accessibility content next to main content.
-      screenWidth = DeviceConfig.NEXUS_5.screenWidth * 2,
-      softButtons = false
+  val paparazzi = PaparazziRule(
+    paparazzi = Paparazzi(
+      deviceConfig = DeviceConfig.NEXUS_5.copy(
+        // Needed to render accessibility content next to main content.
+        screenWidth = DeviceConfig.NEXUS_5.screenWidth * 2,
+        softButtons = false
+      ),
+      renderExtensions = setOf(AccessibilityRenderExtension())
     ),
-    snapshotHandler = snapshotHandler,
-    renderExtensions = setOf(AccessibilityRenderExtension())
+    snapshotHandler = snapshotHandler
   )
 
   @Test
   fun `verify baseline`() {
-    val view = buildView(paparazzi.context)
+    val view = buildView(paparazzi.paparazzi.context)
     paparazzi.snapshot(view, name = "accessibility")
   }
 
   @Test
   fun `test without layout params set`() {
-    val view = buildView(paparazzi.context, null)
+    val view = buildView(paparazzi.paparazzi.context, null)
     paparazzi.snapshot(view, name = "without-layout-params")
   }
 
   @Test
   fun `verify changing view hierarchy order doesn't change accessibility colors`() {
-    val view = buildView(paparazzi.context).apply {
+    val view = buildView(paparazzi.paparazzi.context).apply {
       addView(View(context).apply { contentDescription = "Empty View" }, 0, LinearLayout.LayoutParams(0, 0))
     }
     paparazzi.snapshot(view, name = "accessibility-new-view")
@@ -123,8 +127,8 @@ class AccessibilityRenderExtensionTest {
       snapshot: Snapshot,
       frameCount: Int,
       fps: Int
-    ): SnapshotHandler.FrameHandler {
-      return object : SnapshotHandler.FrameHandler {
+    ): FrameHandler {
+      return object : FrameHandler {
         override fun handle(image: BufferedImage) {
           val expected = File("src/test/resources/${snapshot.name}.png")
           ImageUtils.assertImageSimilar(

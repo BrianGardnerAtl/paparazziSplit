@@ -15,7 +15,8 @@
  */
 package app.cash.paparazzi.internal
 
-import app.cash.paparazzi.TestName
+import app.cash.paparazzi.rule.PaparazziJson
+import app.cash.paparazzi.rule.TestName
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 

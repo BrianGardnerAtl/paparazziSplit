@@ -27,28 +27,33 @@ import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.Button
 import android.widget.TextView
+import app.cash.paparazzi.rule.PaparazziRule
 import com.android.internal.lang.System_Delegate
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.After
+import org.junit.Before
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
+import java.awt.image.BufferedImage
 import java.util.concurrent.TimeUnit
 
 class PaparazziTest {
   @get:Rule
-  val paparazzi = Paparazzi()
+  val paparazzi = PaparazziRule()
 
   @Test
   fun drawCalls() {
     val log = mutableListOf<String>()
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw time=$time"
       }
     }
 
-    paparazzi.snapshot(view)
+    val image = paparazzi.snapshot(view)
+    assertThat(image).isNotNull
 
     assertThat(log).containsExactly("onDraw time=0")
   }
@@ -59,7 +64,8 @@ class PaparazziTest {
 
     // Why Button?  Because it sets a StateListAnimator on window attach
     // See https://github.com/cashapp/paparazzi/pull/319
-    paparazzi.snapshot(Button(paparazzi.context))
+    val image = paparazzi.snapshot(Button(paparazzi.paparazzi.context))
+    assertThat(image).isNotNull
 
     assertThat(AnimationHandler.sAnimatorHandler.get()).isNull()
   }
@@ -79,7 +85,7 @@ class PaparazziTest {
       }
     })
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw time=$time animationElapsed=${animator.animatedValue}"
       }
@@ -120,7 +126,7 @@ class PaparazziTest {
   fun animationCallbacksForStaticSnapshots() {
     val log = mutableListOf<String>()
 
-    val view = object : TextView(paparazzi.context) {
+    val view = object : TextView(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw text=$text"
       }
@@ -147,26 +153,30 @@ class PaparazziTest {
     animator.start()
     assertThat(AnimationHandler.getAnimationCount()).isEqualTo(1)
 
-    paparazzi.snapshot(view, offsetMillis = 0L)
+    val firstImage = paparazzi.snapshot(view, offsetMillis = 0L)
+    assertThat(firstImage).isNotNull
     assertThat(log).containsExactly(
       "onDraw text="
     )
     log.clear()
 
-    paparazzi.snapshot(view, offsetMillis = 2_000L)
+    val secondImage = paparazzi.snapshot(view, offsetMillis = 2_000L)
+    assertThat(secondImage).isNotNull
     assertThat(log).containsExactly(
       "onAnimationStart uptimeMillis=2000",
       "onDraw text=0.0"
     )
     log.clear()
 
-    paparazzi.snapshot(view, offsetMillis = 2_500L)
+    val thirdImage = paparazzi.snapshot(view, offsetMillis = 2_500L)
+    assertThat(thirdImage).isNotNull
     assertThat(log).containsExactly(
       "onDraw text=0.5"
     )
     log.clear()
 
-    paparazzi.snapshot(view, offsetMillis = 3_000L)
+    val lastImage = paparazzi.snapshot(view, offsetMillis = 3_000L)
+    assertThat(lastImage).isNotNull
     assertThat(log).containsExactly(
       "onAnimationEnd uptimeMillis=3000",
       "onDraw text=1.0"
@@ -180,7 +190,7 @@ class PaparazziTest {
   fun frameCallbacksExecutedAfterLayout() {
     val log = mutableListOf<String>()
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         Choreographer.getInstance()
@@ -199,7 +209,7 @@ class PaparazziTest {
 
   @Test
   fun throwsRenderingExceptions() {
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onAttachedToWindow() {
         throw Throwable("Oops")
       }
