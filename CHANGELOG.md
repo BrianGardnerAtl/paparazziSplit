@@ -1,6 +1,13 @@
 Change Log
 ==========
 
+## Version 2.0.0
+_2023-03-22_
+
+### New
+* Separated Paparazzi from JUnit Rule
+* Added PaparazziRule for use in tests
+
 ## Version 1.2.0
 _2023-01-18_
 

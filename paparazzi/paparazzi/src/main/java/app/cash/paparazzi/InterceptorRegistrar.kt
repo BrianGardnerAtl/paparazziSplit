@@ -7,7 +7,7 @@ import net.bytebuddy.matcher.ElementMatchers
 
 object InterceptorRegistrar {
   private val byteBuddy = ByteBuddy()
-  private val methodInterceptors = mutableListOf<() -> Unit>()
+  private val methodInterceptors = mutableMapOf<String, () -> Unit>()
 
   fun addMethodInterceptor(
     receiver: Class<*>,
@@ -19,15 +19,20 @@ object InterceptorRegistrar {
     receiver: Class<*>,
     methodNamesToInterceptors: Set<Pair<String, Class<*>>>
   ) {
-    methodInterceptors += {
+    methodInterceptors += Pair(
+      receiver.name
+    ) {
+      println("${receiver.name} redefine class")
       var builder = byteBuddy
         .redefine(receiver)
+      println("${receiver.name} getting builder $builder")
 
       methodNamesToInterceptors.forEach {
         builder = builder
           .method(ElementMatchers.named(it.first))
           .intercept(MethodDelegation.to(it.second))
       }
+      println("${receiver.name} registered method names to interceptors, load things")
 
       builder
         .make()
@@ -36,7 +41,10 @@ object InterceptorRegistrar {
   }
 
   fun registerMethodInterceptors() {
-    methodInterceptors.forEach { it.invoke() }
+    methodInterceptors.forEach {
+      println("register interceptor: ${it.key}")
+      it.value.invoke()
+    }
   }
 
   fun clearMethodInterceptors() {

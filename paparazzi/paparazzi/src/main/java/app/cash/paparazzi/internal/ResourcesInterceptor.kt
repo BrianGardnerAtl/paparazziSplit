@@ -9,6 +9,7 @@ object ResourcesInterceptor {
     context: Context,
     resId: Int
   ): Typeface? {
+    println("Resources interceptor, swap get font function")
     return context.resources.getFont(resId)
   }
 }

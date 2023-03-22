@@ -401,6 +401,9 @@ class Paparazzi @JvmOverloads constructor(
     } catch (e: ClassNotFoundException) {
       logger.verbose("AppCompat not found on classpath")
       return
+    } catch (e: NoClassDefFoundError) {
+      logger.verbose("AppCompat not found on classpath")
+      return
     }
 
     // See androidx.appcompat.app.AppCompatDelegateImpl#installViewFactory()
@@ -471,6 +474,7 @@ class Paparazzi @JvmOverloads constructor(
   private fun registerFontLookupInterceptionIfResourceCompatDetected() {
     try {
       val resourcesCompatClass = Class.forName("androidx.core.content.res.ResourcesCompat")
+      println("Have resources compat class $resourcesCompatClass")
       InterceptorRegistrar.addMethodInterceptor(
         resourcesCompatClass,
         "getFont",
@@ -483,6 +487,7 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun registerServiceManagerInterception() {
     val serviceManager = Class.forName("android.os.ServiceManager")
+    println("Have service manager class $serviceManager")
     InterceptorRegistrar.addMethodInterceptor(
       serviceManager,
       "getServiceOrThrow",
@@ -492,6 +497,7 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun registerIInputMethodManagerInterception() {
     val iimm = Class.forName("com.android.internal.view.IInputMethodManager\$Stub")
+    println("Have IInput method manager class $iimm")
     InterceptorRegistrar.addMethodInterceptor(
       iimm,
       "asInterface",
@@ -501,6 +507,7 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun registerViewEditModeInterception() {
     val viewClass = Class.forName("android.view.View")
+    println("Have view class $viewClass")
     InterceptorRegistrar.addMethodInterceptor(
       viewClass,
       "isInEditMode",
@@ -510,6 +517,7 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun registerMatrixMultiplyInterception() {
     val matrixClass = Class.forName("android.opengl.Matrix")
+    println("Have matrix class $matrixClass")
     InterceptorRegistrar.addMethodInterceptors(
       matrixClass,
       setOf(
@@ -521,6 +529,7 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun registerChoreographerDelegateInterception() {
     val choreographerDelegateClass = Class.forName("android.view.Choreographer_Delegate")
+    println("Have choreographer delegate class $choreographerDelegateClass")
     InterceptorRegistrar.addMethodInterceptor(
       choreographerDelegateClass,
       "getFrameTimeNanos",
