@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi.internal
+package app.cash.paparazzi.rule
 
-import app.cash.paparazzi.Snapshot
-import app.cash.paparazzi.TestName
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi

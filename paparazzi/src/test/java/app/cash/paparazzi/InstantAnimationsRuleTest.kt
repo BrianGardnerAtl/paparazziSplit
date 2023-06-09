@@ -21,13 +21,14 @@ import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.view.animation.LinearInterpolator
 import android.widget.TextView
+import app.cash.paparazzi.rule.PaparazziRule
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 
 class InstantAnimationsRuleTest {
   @get:Rule
-  val paparazzi = Paparazzi()
+  val paparazzi = PaparazziRule()
 
   @get:Rule
   val instantAnimationsRule = InstantAnimationsRule()
@@ -40,7 +41,7 @@ class InstantAnimationsRuleTest {
   fun happyPath() {
     val log = mutableListOf<String>()
 
-    val view = object : TextView(paparazzi.context) {
+    val view = object : TextView(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw text=$text"
       }

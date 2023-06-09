@@ -18,17 +18,18 @@ package app.cash.paparazzi.sample
 import android.animation.ObjectAnimator
 import android.view.View
 import app.cash.paparazzi.Paparazzi
+import app.cash.paparazzi.rule.PaparazziRule
 import app.cash.paparazzi.sample.databinding.KeypadBinding
 import org.junit.Rule
 import org.junit.Test
 
 class KeypadViewTest {
   @get:Rule
-  val paparazzi = Paparazzi()
+  val paparazzi = PaparazziRule()
 
   @Test
   fun testViews() {
-    val binding = KeypadBinding.inflate(paparazzi.layoutInflater)
+    val binding = KeypadBinding.inflate(paparazzi.paparazzi.layoutInflater)
 
     with(binding) {
       amount.text = "$0"
@@ -38,13 +39,13 @@ class KeypadViewTest {
       paparazzi.snapshot(root, "five bucks")
 
       root.setBackgroundResource(R.color.keypadDarkGrey)
-      val darkGrey = paparazzi.context.getColor(R.color.keypadDarkGrey)
+      val darkGrey = paparazzi.paparazzi.context.getColor(R.color.keypadDarkGrey)
       root.setBackgroundColor(darkGrey)
       amount.text = "$1.00"
       paparazzi.snapshot(root, "grey")
 
       root.setBackgroundResource(R.color.keypadDarkGrey)
-      root.setBackgroundColor(paparazzi.context.getColor(R.color.bolt))
+      root.setBackgroundColor(paparazzi.paparazzi.context.getColor(R.color.bolt))
       amount.setTextColor(darkGrey)
       amount123.setTextColor(darkGrey)
       amount456.setTextColor(darkGrey)

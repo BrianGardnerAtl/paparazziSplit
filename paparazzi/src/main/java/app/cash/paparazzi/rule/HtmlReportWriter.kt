@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.rule
 
-import app.cash.paparazzi.SnapshotHandler.FrameHandler
-import app.cash.paparazzi.internal.PaparazziJson
+import app.cash.paparazzi.FrameHandler
 import com.google.common.base.CharMatcher
 import okio.BufferedSink
 import okio.HashingSink

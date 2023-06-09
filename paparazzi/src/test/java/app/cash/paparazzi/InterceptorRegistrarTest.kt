@@ -1,6 +1,6 @@
-package app.cash.paparazzi.agent
+package app.cash.paparazzi
 
-import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth
 import net.bytebuddy.agent.ByteBuddyAgent
 import org.junit.After
 import org.junit.Before
@@ -26,7 +26,7 @@ class InterceptorRegistrarTest {
     Utils.log1()
     Utils.log2()
 
-    assertThat(logs).containsExactly("intercept1", "intercept2").inOrder()
+    Truth.assertThat(logs).containsExactly("intercept1", "intercept2").inOrder()
   }
 
   @After

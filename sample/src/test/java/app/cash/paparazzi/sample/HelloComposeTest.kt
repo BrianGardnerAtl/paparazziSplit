@@ -13,12 +13,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import app.cash.paparazzi.Paparazzi
+import app.cash.paparazzi.rule.PaparazziRule
 import org.junit.Rule
 import org.junit.Test
 
 class HelloComposeTest {
   @get:Rule
-  val paparazzi = Paparazzi()
+  val paparazzi = PaparazziRule()
 
   @Test
   fun compose() {

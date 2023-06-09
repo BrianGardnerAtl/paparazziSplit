@@ -3,6 +3,7 @@ package app.cash.paparazzi.sample
 import android.widget.LinearLayout
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.cash.paparazzi.rule.PaparazziRule
 import app.cash.paparazzi.sample.databinding.KeypadBinding
 import com.google.testing.junit.testparameterinjector.TestParameter
 import com.google.testing.junit.testparameterinjector.TestParameterInjector
@@ -32,24 +33,25 @@ class TestParameterInjectorTest(
   }
 
   @get:Rule
-  val paparazzi = Paparazzi(deviceConfig = config.deviceConfig)
-
+  val paparazzi = PaparazziRule(
+    paparazzi = Paparazzi(deviceConfig = config.deviceConfig)
+  )
   @Test
   fun simple() {
-    val launch = paparazzi.inflate<LinearLayout>(R.layout.launch)
+    val launch = paparazzi.paparazzi.inflate<LinearLayout>(R.layout.launch)
     paparazzi.snapshot(launch)
   }
 
   @Test
   fun simpleWithTheme(@TestParameter theme: Theme) {
-    paparazzi.unsafeUpdateConfig(theme = theme.themeName)
-    val launch = paparazzi.inflate<LinearLayout>(R.layout.launch)
+    paparazzi.paparazzi.unsafeUpdateConfig(theme = theme.themeName)
+    val launch = paparazzi.paparazzi.inflate<LinearLayout>(R.layout.launch)
     paparazzi.snapshot(launch)
   }
 
   @Test
   fun amountProviderTest(@TestParameter(valuesProvider = AmountProvider::class) amount: String) {
-    val binding = KeypadBinding.inflate(paparazzi.layoutInflater)
+    val binding = KeypadBinding.inflate(paparazzi.paparazzi.layoutInflater)
     binding.amount.text = amount
     paparazzi.snapshot(binding.root)
   }

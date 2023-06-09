@@ -19,14 +19,17 @@ import androidx.compose.ui.semantics.semantics
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import app.cash.paparazzi.accessibility.AccessibilityRenderExtension
+import app.cash.paparazzi.rule.PaparazziRule
 import org.junit.Rule
 import org.junit.Test
 
 class ComposeA11yTest {
   @get:Rule
-  val paparazzi = Paparazzi(
-    deviceConfig = DeviceConfig.PIXEL.copy(screenWidth = DeviceConfig.PIXEL.screenWidth * 2, softButtons = false),
-    renderExtensions = setOf(AccessibilityRenderExtension())
+  val paparazzi = PaparazziRule(
+    paparazzi = Paparazzi(
+      deviceConfig = DeviceConfig.PIXEL.copy(screenWidth = DeviceConfig.PIXEL.screenWidth * 2, softButtons = false),
+      renderExtensions = setOf(AccessibilityRenderExtension())
+    )
   )
 
   @Test

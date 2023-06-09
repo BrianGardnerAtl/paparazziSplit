@@ -13,10 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.rule
 
-data class TestName(
-  val packageName: String,
-  val className: String,
-  val methodName: String
-)
+import app.cash.paparazzi.FrameHandler
+import java.io.Closeable
+
+interface SnapshotHandler : Closeable {
+  fun newFrameHandler(
+    snapshot: Snapshot,
+    frameCount: Int,
+    fps: Int
+  ): FrameHandler
+}

@@ -27,6 +27,7 @@ import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.Button
 import android.widget.TextView
+import app.cash.paparazzi.rule.PaparazziRule
 import com.android.internal.lang.System_Delegate
 import com.google.common.truth.Truth.assertThat
 import org.junit.Ignore
@@ -36,13 +37,13 @@ import java.util.concurrent.TimeUnit
 
 class PaparazziTest {
   @get:Rule
-  val paparazzi = Paparazzi()
+  val paparazzi = PaparazziRule()
 
   @Test
   fun drawCalls() {
     val log = mutableListOf<String>()
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw time=$time"
       }
@@ -59,7 +60,7 @@ class PaparazziTest {
 
     // Why Button?  Because it sets a StateListAnimator on window attach
     // See https://github.com/cashapp/paparazzi/pull/319
-    paparazzi.snapshot(Button(paparazzi.context))
+    paparazzi.snapshot(Button(paparazzi.paparazzi.context))
 
     assertThat(AnimationHandler.sAnimatorHandler.get()).isNull()
   }
@@ -79,7 +80,7 @@ class PaparazziTest {
       }
     })
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw time=$time animationElapsed=${animator.animatedValue}"
       }
@@ -120,7 +121,7 @@ class PaparazziTest {
   fun animationCallbacksForStaticSnapshots() {
     val log = mutableListOf<String>()
 
-    val view = object : TextView(paparazzi.context) {
+    val view = object : TextView(paparazzi.paparazzi.context) {
       override fun onDraw(canvas: Canvas) {
         log += "onDraw text=$text"
       }
@@ -180,7 +181,7 @@ class PaparazziTest {
   fun frameCallbacksExecutedAfterLayout() {
     val log = mutableListOf<String>()
 
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         Choreographer.getInstance()
@@ -199,7 +200,7 @@ class PaparazziTest {
 
   @Test
   fun throwsRenderingExceptions() {
-    val view = object : View(paparazzi.context) {
+    val view = object : View(paparazzi.paparazzi.context) {
       override fun onAttachedToWindow() {
         throw Throwable("Oops")
       }

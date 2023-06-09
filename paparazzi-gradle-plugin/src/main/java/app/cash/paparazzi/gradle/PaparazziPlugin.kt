@@ -197,6 +197,7 @@ class PaparazziPlugin : Plugin<Project> {
           // They need special handling, so they're added as inputs.property above, and systemProperty here.
           test.systemProperties["paparazzi.platform.data.root"] =
             nativePlatformFileCollection.singleFile.absolutePath
+          println("Have native platform path: ${nativePlatformFileCollection.singleFile.absolutePath}")
           test.systemProperties["paparazzi.test.record"] = isRecordRun.get()
           test.systemProperties["paparazzi.test.verify"] = isVerifyRun.get()
         }

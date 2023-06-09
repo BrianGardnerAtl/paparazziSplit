@@ -36,8 +36,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import app.cash.paparazzi.agent.AgentTestRule
-import app.cash.paparazzi.agent.InterceptorRegistrar
 import app.cash.paparazzi.internal.ImageUtils
 import app.cash.paparazzi.internal.PaparazziCallback
 import app.cash.paparazzi.internal.PaparazziLifecycleOwner
@@ -71,9 +69,7 @@ import com.android.tools.idea.validator.LayoutValidator
 import com.android.tools.idea.validator.ValidatorData.Level
 import com.android.tools.idea.validator.ValidatorData.Policy
 import com.android.tools.idea.validator.ValidatorData.Type
-import org.junit.rules.TestRule
-import org.junit.runner.Description
-import org.junit.runners.model.Statement
+import net.bytebuddy.agent.ByteBuddyAgent
 import java.awt.geom.Ellipse2D
 import java.awt.image.BufferedImage
 import java.util.Date
@@ -86,17 +82,15 @@ class Paparazzi @JvmOverloads constructor(
   private val theme: String = "android:Theme.Material.NoActionBar.Fullscreen",
   private val renderingMode: RenderingMode = RenderingMode.NORMAL,
   private val appCompatEnabled: Boolean = true,
-  private val maxPercentDifference: Double = 0.1,
-  private val snapshotHandler: SnapshotHandler = determineHandler(maxPercentDifference),
   private val renderExtensions: Set<RenderExtension> = setOf(),
   private val supportsRtl: Boolean = false,
   private val showSystemUi: Boolean = false,
   private val validateAccessibility: Boolean = false
-) : TestRule {
+) {
   private val logger = PaparazziLogger()
   private lateinit var renderSession: RenderSessionImpl
   private lateinit var bridgeRenderSession: RenderSession
-  private var testName: TestName? = null
+  private var frameHandler: FrameHandler? = null
 
   val layoutInflater: LayoutInflater
     get() = RenderAction.getCurrentContext().getSystemService("layout_inflater") as BridgeInflater
@@ -114,23 +108,8 @@ class Paparazzi @JvmOverloads constructor(
         |              android:layout_height="${if (renderingMode.vertAction == RenderingMode.SizeAction.SHRINK) "wrap_content" else "match_parent"}"/>
   """.trimMargin()
 
-  override fun apply(
-    base: Statement,
-    description: Description
-  ): Statement {
-    val statement = object : Statement() {
-      override fun evaluate() {
-        prepare(description)
-        try {
-          base.evaluate()
-        } finally {
-          close()
-          logger.assertNoErrors()
-        }
-      }
-    }
-
-    return if (!isInitialized) {
+  init {
+    if (!isInitialized) {
       registerFontLookupInterceptionIfResourceCompatDetected()
       registerViewEditModeInterception()
       registerMatrixMultiplyInterception()
@@ -138,19 +117,15 @@ class Paparazzi @JvmOverloads constructor(
       registerServiceManagerInterception()
       registerIInputMethodManagerInterception()
 
-      val outerRule = AgentTestRule()
-      outerRule.apply(statement, description)
-    } else {
-      statement
+      ByteBuddyAgent.install()
+      InterceptorRegistrar.registerMethodInterceptors()
     }
   }
 
-  fun prepare(description: Description) {
+  fun prepare() {
     val layoutlibCallback =
       PaparazziCallback(logger, environment.packageName, environment.resourcePackageNames)
     layoutlibCallback.initResources()
-
-    testName = description.toTestName()
 
     if (!isInitialized) {
       renderer = Renderer(environment, layoutlibCallback, logger)
@@ -183,33 +158,37 @@ class Paparazzi @JvmOverloads constructor(
   }
 
   fun close() {
-    testName = null
+    frameHandler?.close()
+    frameHandler = null
     renderSession.release()
     bridgeRenderSession.dispose()
     cleanupThread()
-    snapshotHandler.close()
 
     renderer.dumpDelegates()
+    logger.assertNoErrors()
+  }
+
+  fun setFrameHandler(handler: FrameHandler) {
+    frameHandler = handler
   }
 
   fun <V : View> inflate(@LayoutRes layoutId: Int): V = layoutInflater.inflate(layoutId, null) as V
 
-  fun snapshot(name: String? = null, composable: @Composable () -> Unit) {
+  fun snapshot(composable: @Composable () -> Unit) {
     val hostView = ComposeView(context)
     hostView.setContent(composable)
 
-    snapshot(hostView, name)
+    snapshot(hostView)
   }
 
   @JvmOverloads
-  fun snapshot(view: View, name: String? = null, offsetMillis: Long = 0L) {
-    takeSnapshots(view, name, TimeUnit.MILLISECONDS.toNanos(offsetMillis), -1, 1)
+  fun snapshot(view: View, offsetMillis: Long = 0L) {
+    takeSnapshots(view, TimeUnit.MILLISECONDS.toNanos(offsetMillis), -1, 1)
   }
 
   @JvmOverloads
   fun gif(
     view: View,
-    name: String? = null,
     start: Long = 0L,
     end: Long = 500L,
     fps: Int = 30
@@ -220,7 +199,7 @@ class Paparazzi @JvmOverloads constructor(
     val durationMillis = (end - start).toInt()
     val frameCount = (durationMillis * fps) / 1000 + 1
     val startNanos = TimeUnit.MILLISECONDS.toNanos(start)
-    takeSnapshots(view, name, startNanos, fps, frameCount)
+    takeSnapshots(view, startNanos, fps, frameCount)
   }
 
   fun unsafeUpdateConfig(
@@ -265,15 +244,13 @@ class Paparazzi @JvmOverloads constructor(
 
   private fun takeSnapshots(
     view: View,
-    name: String?,
     startNanos: Long,
     fps: Int,
     frameCount: Int
   ) {
-    val snapshot = Snapshot(name, testName!!, Date())
-
-    val frameHandler = snapshotHandler.newFrameHandler(snapshot, frameCount, fps)
-    frameHandler.use {
+    // Double bang here because we should always have a FrameHandler instance when taking
+    // a snapshot.
+    frameHandler!!.use { handler ->
       val viewGroup = bridgeRenderSession.rootViews[0].viewObject as ViewGroup
       val modifiedView = renderExtensions.fold(view) { view, renderExtension ->
         renderExtension.renderView(view)
@@ -322,7 +299,7 @@ class Paparazzi @JvmOverloads constructor(
               }
               validateLayoutAccessibility(modifiedView, image)
             }
-            frameHandler.handle(scaleImage(frameImage(image)))
+            handler.handle(scaleImage(frameImage(image)))
           }
         }
       } finally {
@@ -439,13 +416,6 @@ class Paparazzi @JvmOverloads constructor(
     }
   }
 
-  private fun Description.toTestName(): TestName {
-    val fullQualifiedName = className
-    val packageName = fullQualifiedName.substringBeforeLast('.', missingDelimiterValue = "")
-    val className = fullQualifiedName.substringAfterLast('.')
-    return TestName(packageName, className, methodName)
-  }
-
   private fun forcePlatformSdkVersion(compileSdkVersion: Int) {
     val buildVersionClass = try {
       Paparazzi::class.java.classLoader.loadClass("android.os.Build\$VERSION")
@@ -469,6 +439,9 @@ class Paparazzi @JvmOverloads constructor(
 
       appCompatDelegateClass = Class.forName("androidx.appcompat.app.AppCompatDelegate")
     } catch (e: ClassNotFoundException) {
+      logger.verbose("AppCompat not found on classpath")
+      return
+    } catch (e: NoClassDefFoundError) {
       logger.verbose("AppCompat not found on classpath")
       return
     }
@@ -624,9 +597,6 @@ class Paparazzi @JvmOverloads constructor(
 
     internal lateinit var sessionParamsBuilder: SessionParamsBuilder
 
-    private val isVerifying: Boolean =
-      System.getProperty("paparazzi.test.verify")?.toBoolean() == true
-
     private val hasComposeRuntime: Boolean = isPresentInClasspath(
       "androidx.compose.runtime.snapshots.SnapshotKt",
       "androidx.compose.ui.platform.AndroidUiDispatcher"
@@ -651,12 +621,5 @@ class Paparazzi @JvmOverloads constructor(
         false
       }
     }
-
-    private fun determineHandler(maxPercentDifference: Double): SnapshotHandler =
-      if (isVerifying) {
-        SnapshotVerifier(maxPercentDifference)
-      } else {
-        HtmlReportWriter()
-      }
   }
 }

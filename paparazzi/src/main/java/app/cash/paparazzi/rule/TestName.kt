@@ -13,19 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.rule
 
-import java.awt.image.BufferedImage
-import java.io.Closeable
-
-interface SnapshotHandler : Closeable {
-  fun newFrameHandler(
-    snapshot: Snapshot,
-    frameCount: Int,
-    fps: Int
-  ): FrameHandler
-
-  interface FrameHandler : Closeable {
-    fun handle(image: BufferedImage)
-  }
-}
+data class TestName(
+  val packageName: String,
+  val className: String,
+  val methodName: String
+)
