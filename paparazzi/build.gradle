@@ -4,6 +4,7 @@ apply plugin: 'org.jetbrains.kotlin.jvm'
 apply plugin: 'org.jetbrains.dokka'
 apply plugin: 'com.vanniktech.maven.publish'
 apply plugin: 'com.google.devtools.ksp'
+apply plugin: 'maven-publish'
 
 sourceCompatibility = libs.versions.javaTarget.get()
 targetCompatibility = libs.versions.javaTarget.get()

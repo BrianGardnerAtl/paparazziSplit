@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2023-03-22
+
+### New
+* Separated Paparazzi from JUnit Rule
+* Added PaparazziRule for use in tests
+
 ## [1.3.0] - 2023-05-31
 
 As of this release, consumers must build on Java 17+ environments.
