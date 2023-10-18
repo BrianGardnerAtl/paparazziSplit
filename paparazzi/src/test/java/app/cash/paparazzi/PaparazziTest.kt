@@ -217,6 +217,6 @@ class PaparazziTest {
 
   private val time: Long
     get() {
-      return TimeUnit.NANOSECONDS.toMillis(System_Delegate.nanoTime() - Paparazzi.TIME_OFFSET_NANOS)
+      return TimeUnit.NANOSECONDS.toMillis(System_Delegate.nanoTime() - PaparazziSdk.TIME_OFFSET_NANOS)
     }
 }
