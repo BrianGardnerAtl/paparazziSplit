@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.test
 
+import app.cash.paparazzi.ViewSnapshot
 import app.cash.paparazzi.internal.PaparazziJson
 import com.google.common.base.CharMatcher
 import okio.BufferedSink
@@ -31,6 +32,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import javax.imageio.ImageIO
+import kotlinx.coroutines.runBlocking
 
 /**
  * Creates an HTML report that avoids writing files that have already been written.
@@ -68,7 +70,7 @@ class HtmlReportWriter @JvmOverloads constructor(
   private val goldenImagesDirectory = File(snapshotRootDirectory, "images")
   private val goldenVideosDirectory = File(snapshotRootDirectory, "videos")
 
-  private val shots = mutableListOf<Snapshot>()
+  private val shots = mutableListOf<TestRecord>()
 
   private val isRecording: Boolean =
     System.getProperty("paparazzi.test.record")?.toBoolean() == true
@@ -82,54 +84,48 @@ class HtmlReportWriter @JvmOverloads constructor(
     writeIndexJs()
   }
 
-  override fun newFrameHandler(
-    snapshot: Snapshot,
-    frameCount: Int,
-    fps: Int
-  ): FrameHandler {
-    return object : FrameHandler {
-      val hashes = mutableListOf<String>()
+  override fun handleSnapshot(viewSnapshot: ViewSnapshot, testRecord: TestRecord) {
+    val hashes = mutableListOf<String>()
 
-      override fun handle(image: BufferedImage) {
+    runBlocking {
+      viewSnapshot.imageFlow.collect { image ->
         hashes += writeImage(image)
       }
-
-      override fun close() {
-        if (hashes.isEmpty()) return
-
-        val shot = if (hashes.size == 1) {
-          val original = File(imagesDirectory, "${hashes[0]}.png")
-          if (isRecording) {
-            val goldenFile = File(goldenImagesDirectory, snapshot.toFileName("_", "png"))
-            original.copyTo(goldenFile, overwrite = true)
-          }
-          snapshot.copy(file = original.toJsonPath())
-        } else {
-          val hash = writeVideo(hashes, fps)
-
-          if (isRecording) {
-            for ((index, frameHash) in hashes.withIndex()) {
-              val originalFrame = File(imagesDirectory, "$frameHash.png")
-              val frameSnapshot = snapshot.copy(name = "${snapshot.name} $index")
-              val goldenFile = File(goldenImagesDirectory, frameSnapshot.toFileName("_", "png"))
-              if (!goldenFile.exists()) {
-                originalFrame.copyTo(goldenFile)
-              }
-            }
-          }
-          val original = File(videosDirectory, "$hash.mov")
-          if (isRecording) {
-            val goldenFile = File(goldenVideosDirectory, snapshot.toFileName("_", "mov"))
-            if (!goldenFile.exists()) {
-              original.copyTo(goldenFile)
-            }
-          }
-          snapshot.copy(file = original.toJsonPath())
-        }
-
-        shots += shot
-      }
     }
+
+    if (hashes.isEmpty()) return
+
+    val shot = if (hashes.size == 1) {
+      val original = File(imagesDirectory, "${hashes[0]}.png")
+      if (isRecording) {
+        val goldenFile = File(goldenImagesDirectory, testRecord.toFileName("_", "png"))
+        original.copyTo(goldenFile, overwrite = true)
+      }
+      testRecord.copy(file = original.toJsonPath())
+    } else {
+      val hash = writeVideo(hashes, viewSnapshot.fps)
+
+      if (isRecording) {
+        for ((index, frameHash) in hashes.withIndex()) {
+          val originalFrame = File(imagesDirectory, "$frameHash.png")
+          val frameSnapshot = testRecord.copy(name = "${testRecord.name} $index")
+          val goldenFile = File(goldenImagesDirectory, frameSnapshot.toFileName("_", "png"))
+          if (!goldenFile.exists()) {
+            originalFrame.copyTo(goldenFile)
+          }
+        }
+      }
+      val original = File(videosDirectory, "$hash.mov")
+      if (isRecording) {
+        val goldenFile = File(goldenVideosDirectory, testRecord.toFileName("_", "mov"))
+        if (!goldenFile.exists()) {
+          original.copyTo(goldenFile)
+        }
+      }
+      testRecord.copy(file = original.toJsonPath())
+    }
+
+    shots += shot
   }
 
   /** Returns the hash of the image. */

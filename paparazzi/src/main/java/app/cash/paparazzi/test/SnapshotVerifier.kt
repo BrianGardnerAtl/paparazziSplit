@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.test
 
+import app.cash.paparazzi.ViewSnapshot
 import app.cash.paparazzi.internal.ImageUtils
-import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class SnapshotVerifier @JvmOverloads constructor(
   private val maxPercentDifference: Double,
@@ -32,30 +34,23 @@ class SnapshotVerifier @JvmOverloads constructor(
     videosDirectory.mkdirs()
   }
 
-  override fun newFrameHandler(
-    snapshot: Snapshot,
-    frameCount: Int,
-    fps: Int
-  ): FrameHandler {
-    return object : FrameHandler {
-      override fun handle(image: BufferedImage) {
-        // Note: does not handle videos or its frames at the moment
-        val expected = File(imagesDirectory, snapshot.toFileName(extension = "png"))
-        if (!expected.exists()) {
-          throw AssertionError("File $expected does not exist")
-        }
-
-        val goldenImage = ImageIO.read(expected)
-        ImageUtils.assertImageSimilar(
-          relativePath = expected.path,
-          image = image,
-          goldenImage = goldenImage,
-          maxPercentDifferent = maxPercentDifference
-        )
-      }
-
-      override fun close() = Unit
+  override fun handleSnapshot(viewSnapshot: ViewSnapshot, testRecord: TestRecord) {
+    // Note: does not handle videos or its frames at the moment
+    val expected = File(imagesDirectory, testRecord.toFileName(extension = "png"))
+    if (!expected.exists()) {
+      throw AssertionError("File $expected does not exist")
     }
+
+    val goldenImage = ImageIO.read(expected)
+    val image = runBlocking {
+      viewSnapshot.imageFlow.first()
+    }
+    ImageUtils.assertImageSimilar(
+      relativePath = expected.path,
+      image = image,
+      goldenImage = goldenImage,
+      maxPercentDifferent = maxPercentDifference
+    )
   }
 
   override fun close() = Unit

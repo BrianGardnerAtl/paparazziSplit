@@ -13,14 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package app.cash.paparazzi
+package app.cash.paparazzi.test
 
+import app.cash.paparazzi.ViewSnapshot
 import java.io.Closeable
 
 interface SnapshotHandler : Closeable {
-  fun newFrameHandler(
-    snapshot: Snapshot,
-    frameCount: Int,
-    fps: Int
-  ): FrameHandler
+  fun handleSnapshot(viewSnapshot: ViewSnapshot, testRecord: TestRecord)
 }

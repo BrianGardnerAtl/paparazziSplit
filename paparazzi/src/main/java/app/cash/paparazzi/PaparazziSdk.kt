@@ -37,7 +37,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import app.cash.paparazzi.agent.InterceptorRegistrar
-import app.cash.paparazzi.internal.ImageUtils
 import app.cash.paparazzi.internal.PaparazziCallback
 import app.cash.paparazzi.internal.PaparazziLifecycleOwner
 import app.cash.paparazzi.internal.PaparazziLogger
@@ -65,32 +64,29 @@ import com.android.layoutlib.bridge.Bridge.prepareThread
 import com.android.layoutlib.bridge.BridgeRenderSession
 import com.android.layoutlib.bridge.impl.RenderAction
 import com.android.layoutlib.bridge.impl.RenderSessionImpl
-import com.android.resources.ScreenRound
 import com.android.tools.idea.validator.LayoutValidator
 import com.android.tools.idea.validator.ValidatorData.Level
 import com.android.tools.idea.validator.ValidatorData.Policy
 import com.android.tools.idea.validator.ValidatorData.Type
 import net.bytebuddy.agent.ByteBuddyAgent
-import java.awt.geom.Ellipse2D
 import java.awt.image.BufferedImage
 import java.util.EnumSet
 import java.util.concurrent.TimeUnit
 
 class PaparazziSdk @JvmOverloads constructor(
   private val environment: Environment = detectEnvironment(),
-  private val deviceConfig: DeviceConfig = DeviceConfig.NEXUS_5,
+  val deviceConfig: DeviceConfig = DeviceConfig.NEXUS_5,
   private val theme: String = "android:Theme.Material.NoActionBar.Fullscreen",
-  private val renderingMode: RenderingMode = RenderingMode.NORMAL,
+  val renderingMode: RenderingMode = RenderingMode.NORMAL,
   private val appCompatEnabled: Boolean = true,
   private val renderExtensions: Set<RenderExtension> = setOf(),
   private val supportsRtl: Boolean = false,
   private val showSystemUi: Boolean = false,
   private val validateAccessibility: Boolean = false
-) {
+) : ViewRenderer {
   private val logger = PaparazziLogger()
   private lateinit var renderSession: RenderSessionImpl
   private lateinit var bridgeRenderSession: RenderSession
-  private var frameHandler: FrameHandler? = null
 
   val layoutInflater: LayoutInflater
     get() = RenderAction.getCurrentContext().getSystemService("layout_inflater") as BridgeInflater
@@ -159,8 +155,6 @@ class PaparazziSdk @JvmOverloads constructor(
   }
 
   fun close() {
-    frameHandler?.close()
-    frameHandler = null
     renderSession.release()
     bridgeRenderSession.dispose()
     cleanupThread()
@@ -169,38 +163,85 @@ class PaparazziSdk @JvmOverloads constructor(
     logger.assertNoErrors()
   }
 
-  fun setFrameHandler(handler: FrameHandler) {
-    frameHandler = handler
-  }
-
   fun <V : View> inflate(@LayoutRes layoutId: Int): V = layoutInflater.inflate(layoutId, null) as V
 
-  fun snapshot(composable: @Composable () -> Unit) {
+  override fun prepareView(composable: @Composable () -> Unit): PreparedView {
     val hostView = ComposeView(context)
     hostView.setContent(composable)
 
-    snapshot(hostView)
+    return prepareView(hostView)
   }
 
-  @JvmOverloads
-  fun snapshot(view: View, offsetMillis: Long = 0L) {
-    takeSnapshots(view, TimeUnit.MILLISECONDS.toNanos(offsetMillis), -1, 1)
-  }
+  override fun prepareView(
+    view: View
+  ): PreparedView {
+    // TODO: calling prepare view multiple times would override the root view in the render session
+    //  This could be an issue if folks are using Paparazzi to snapshot different views at the same time
+    //  in a single test.
+    return object : PreparedView {
+      val viewGroup = bridgeRenderSession.rootViews[0].viewObject as ViewGroup
+      val modifiedView = renderExtensions.fold(view) { view, renderExtension ->
+        renderExtension.renderView(view)
+      }
 
-  @JvmOverloads
-  fun gif(
-    view: View,
-    start: Long = 0L,
-    end: Long = 500L,
-    fps: Int = 30
-  ) {
-    // Add one to the frame count so we get the last frame. Otherwise a 1 second, 60 FPS animation
-    // our 60th frame will be at time 983 ms, and we want our last frame to be 1,000 ms. This gets
-    // us 61 frames for a 1 second animation, 121 frames for a 2 second animation, etc.
-    val durationMillis = (end - start).toInt()
-    val frameCount = (durationMillis * fps) / 1000 + 1
-    val startNanos = TimeUnit.MILLISECONDS.toNanos(start)
-    takeSnapshots(view, startNanos, fps, frameCount)
+      init {
+        System_Delegate.setBootTimeNanos(0)
+        withTime(0L) {
+          // Initialize the choreographer at time=0.
+        }
+
+        if (hasComposeRuntime) {
+          // During onAttachedToWindow, AbstractComposeView will attempt to resolve its parent's
+          // CompositionContext, which requires first finding the "content view", then using that
+          // to find a root view with a ViewTreeLifecycleOwner
+          viewGroup.id = android.R.id.content
+        }
+
+        if (hasLifecycleOwnerRuntime) {
+          val lifecycleOwner = PaparazziLifecycleOwner()
+          modifiedView.setViewTreeLifecycleOwner(lifecycleOwner)
+
+          if (hasSavedStateRegistryOwnerRuntime) {
+            modifiedView.setViewTreeSavedStateRegistryOwner(PaparazziSavedStateRegistryOwner(lifecycleOwner))
+          }
+          if (hasAndroidxActivityRuntime) {
+            modifiedView.setViewTreeOnBackPressedDispatcherOwner(PaparazziOnBackPressedDispatcherOwner(lifecycleOwner))
+          }
+          // Must be changed after the SavedStateRegistryOwner above has finished restoring its state.
+          lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED
+        }
+
+        viewGroup.addView(modifiedView)
+      }
+
+      override fun takeSnapshot(snapshotTimeMillis: Long): BufferedImage {
+        val snapshotTimeNanos = TimeUnit.MILLISECONDS.toNanos(snapshotTimeMillis)
+        var snapshotImage: BufferedImage? = null
+        withTime(snapshotTimeNanos) {
+          val result = renderSession.render(true)
+          if (result.status == ERROR_UNKNOWN) {
+            throw result.exception
+          }
+
+          snapshotImage = bridgeRenderSession.image
+          if (validateAccessibility) {
+            require(renderExtensions.isEmpty()) {
+              "Running accessibility validation and render extensions simultaneously is not supported."
+            }
+            validateLayoutAccessibility(modifiedView, snapshotImage)
+          }
+        }
+        return snapshotImage!!
+      }
+
+      override fun close() {
+        viewGroup.removeView(modifiedView)
+        AnimationHandler.sAnimatorHandler.set(null)
+        if (hasComposeRuntime) {
+          forceReleaseComposeReferenceLeaks()
+        }
+      }
+    }
   }
 
   fun unsafeUpdateConfig(
@@ -241,77 +282,6 @@ class PaparazziSdk @JvmOverloads constructor(
     renderSession.init(sessionParams.timeout)
     Bitmap.setDefaultDensity(DisplayMetrics.DENSITY_DEVICE_STABLE)
     bridgeRenderSession = createBridgeSession(renderSession, renderSession.inflate())
-  }
-
-  private fun takeSnapshots(
-    view: View,
-    startNanos: Long,
-    fps: Int,
-    frameCount: Int
-  ) {
-    val handler = frameHandler
-      ?: throw IllegalStateException("Cannot take snapshot without a FrameHandler.")
-
-    handler.use {
-      val viewGroup = bridgeRenderSession.rootViews[0].viewObject as ViewGroup
-      val modifiedView = renderExtensions.fold(view) { view, renderExtension ->
-        renderExtension.renderView(view)
-      }
-
-      System_Delegate.setBootTimeNanos(0L)
-      try {
-        withTime(0L) {
-          // Initialize the choreographer at time=0.
-        }
-
-        if (hasComposeRuntime) {
-          // During onAttachedToWindow, AbstractComposeView will attempt to resolve its parent's
-          // CompositionContext, which requires first finding the "content view", then using that
-          // to find a root view with a ViewTreeLifecycleOwner
-          viewGroup.id = android.R.id.content
-        }
-
-        if (hasLifecycleOwnerRuntime) {
-          val lifecycleOwner = PaparazziLifecycleOwner()
-          modifiedView.setViewTreeLifecycleOwner(lifecycleOwner)
-
-          if (hasSavedStateRegistryOwnerRuntime) {
-            modifiedView.setViewTreeSavedStateRegistryOwner(PaparazziSavedStateRegistryOwner(lifecycleOwner))
-          }
-          if (hasAndroidxActivityRuntime) {
-            modifiedView.setViewTreeOnBackPressedDispatcherOwner(PaparazziOnBackPressedDispatcherOwner(lifecycleOwner))
-          }
-          // Must be changed after the SavedStateRegistryOwner above has finished restoring its state.
-          lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED
-        }
-
-        viewGroup.addView(modifiedView)
-        for (frame in 0 until frameCount) {
-          val nowNanos = (startNanos + (frame * 1_000_000_000.0 / fps)).toLong()
-          withTime(nowNanos) {
-            val result = renderSession.render(true)
-            if (result.status == ERROR_UNKNOWN) {
-              throw result.exception
-            }
-
-            val image = bridgeRenderSession.image
-            if (validateAccessibility) {
-              require(renderExtensions.isEmpty()) {
-                "Running accessibility validation and render extensions simultaneously is not supported."
-              }
-              validateLayoutAccessibility(modifiedView, image)
-            }
-            handler.handle(scaleImage(frameImage(image)))
-          }
-        }
-      } finally {
-        viewGroup.removeView(modifiedView)
-        AnimationHandler.sAnimatorHandler.set(null)
-        if (hasComposeRuntime) {
-          forceReleaseComposeReferenceLeaks()
-        }
-      }
-    }
   }
 
   private fun withTime(
@@ -370,25 +340,6 @@ class PaparazziSdk @JvmOverloads constructor(
     } catch (e: Exception) {
       throw RuntimeException(e)
     }
-  }
-
-  private fun frameImage(image: BufferedImage): BufferedImage {
-    // On device sized screenshot, we should apply any device specific shapes.
-    if (renderingMode == RenderingMode.NORMAL && deviceConfig.screenRound == ScreenRound.ROUND) {
-      val newImage = BufferedImage(image.width, image.height, image.type)
-      val g = newImage.createGraphics()
-      g.clip = Ellipse2D.Float(0f, 0f, image.height.toFloat(), image.width.toFloat())
-      g.drawImage(image, 0, 0, image.width, image.height, null)
-      return newImage
-    }
-
-    return image
-  }
-
-  private fun scaleImage(image: BufferedImage): BufferedImage {
-    val scale = ImageUtils.getThumbnailScale(image)
-    // Only scale images down so we don't waste storage space enlarging smaller layouts.
-    return if (scale < 1f) ImageUtils.scale(image, scale, scale) else image
   }
 
   private fun validateLayoutAccessibility(view: View, image: BufferedImage? = null) {

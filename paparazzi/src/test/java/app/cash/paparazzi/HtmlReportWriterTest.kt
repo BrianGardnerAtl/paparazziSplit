@@ -16,6 +16,10 @@
 package app.cash.paparazzi
 
 import app.cash.paparazzi.FileSubject.Companion.assertThat
+import app.cash.paparazzi.test.HtmlReportWriter
+import app.cash.paparazzi.test.TestName
+import app.cash.paparazzi.test.TestRecord
+import app.cash.paparazzi.test.sanitizeForFilename
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -27,6 +31,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 import java.time.Instant
 import java.util.Date
+import kotlinx.coroutines.flow.flow
 
 class HtmlReportWriterTest {
   @get:Rule
@@ -42,19 +47,15 @@ class HtmlReportWriterTest {
   fun happyPath() {
     val htmlReportWriter = HtmlReportWriter("run_one", reportRoot.root)
     htmlReportWriter.use {
-      val frameHandler = htmlReportWriter.newFrameHandler(
-        Snapshot(
+      htmlReportWriter.handleSnapshot(
+        ViewSnapshot(flow { emit(anyImage) }),
+        TestRecord(
           name = "loading",
           testName = TestName("app.cash.paparazzi", "CelebrityTest", "testSettings"),
           timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate(),
           tags = listOf("redesign")
-        ),
-        1,
-        -1
+        )
       )
-      frameHandler.use {
-        frameHandler.handle(anyImage)
-      }
     }
 
     assertThat(File("${reportRoot.root}/index.js")).hasContent(
@@ -93,18 +94,16 @@ class HtmlReportWriterTest {
   fun noSnapshotOnFailure() {
     val htmlReportWriter = HtmlReportWriter("run_one", reportRoot.root)
     htmlReportWriter.use {
-      val frameHandler = htmlReportWriter.newFrameHandler(
-        snapshot = Snapshot(
+      htmlReportWriter.handleSnapshot(
+        // empty flow to simulate error
+        ViewSnapshot(flow { }),
+        TestRecord(
           name = "loading",
           testName = TestName("app.cash.paparazzi", "CelebrityTest", "testSettings"),
-          timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate()
-        ),
-        frameCount = 4,
-        fps = -1
+          timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate(),
+          tags = listOf("redesign")
+        )
       )
-      frameHandler.use {
-        // intentionally empty, to simulate no content written on exception
-      }
     }
 
     assertThat(File(reportRoot.root, "images")).isEmptyDirectory()
@@ -119,7 +118,7 @@ class HtmlReportWriterTest {
     val htmlReportWriter = HtmlReportWriter("record_run", reportRoot.root, snapshotRoot.root)
     htmlReportWriter.use {
       val now = Instant.parse("2021-02-23T10:27:43Z")
-      val snapshot = Snapshot(
+      val testRecord = TestRecord(
         name = "test",
         testName = TestName("app.cash.paparazzi", "HomeView", "testSettings"),
         timestamp = now.toDate()
@@ -130,13 +129,10 @@ class HtmlReportWriterTest {
       // precondition
       assertThat(golden).doesNotExist()
 
-      // take 1
-      val frameHandler1 = htmlReportWriter.newFrameHandler(
-        snapshot = snapshot,
-        frameCount = 1,
-        fps = -1
+      htmlReportWriter.handleSnapshot(
+        ViewSnapshot(flow { emit(anyImage) }),
+        testRecord
       )
-      frameHandler1.use { frameHandler1.handle(anyImage) }
       assertThat(golden).exists()
       val timeFirstWrite = golden.lastModifiedTime()
 
@@ -144,12 +140,10 @@ class HtmlReportWriterTest {
       Thread.sleep(100)
 
       // take 2
-      val frameHandler2 = htmlReportWriter.newFrameHandler(
-        snapshot = snapshot.copy(timestamp = now.plusSeconds(1).toDate()),
-        frameCount = 1,
-        fps = -1
+      htmlReportWriter.handleSnapshot(
+        ViewSnapshot(flow { emit(anyImage) }),
+        testRecord.copy(timestamp = now.plusSeconds(1).toDate())
       )
-      frameHandler2.use { frameHandler2.handle(anyImage) }
       assertThat(golden).exists()
       val timeOverwrite = golden.lastModifiedTime()
 

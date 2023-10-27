@@ -12,16 +12,17 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.cash.paparazzi.DeviceConfig
-import app.cash.paparazzi.FrameHandler
 import app.cash.paparazzi.Paparazzi
-import app.cash.paparazzi.Snapshot
-import app.cash.paparazzi.SnapshotHandler
+import app.cash.paparazzi.ViewSnapshot
 import app.cash.paparazzi.internal.ImageUtils
+import app.cash.paparazzi.test.SnapshotHandler
+import app.cash.paparazzi.test.TestRecord
 import org.junit.Rule
 import org.junit.Test
-import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class AccessibilityRenderExtensionTest {
 
@@ -119,24 +120,17 @@ class AccessibilityRenderExtensionTest {
     }
 
   private class TestSnapshotVerifier : SnapshotHandler {
-    override fun newFrameHandler(
-      snapshot: Snapshot,
-      frameCount: Int,
-      fps: Int
-    ): FrameHandler {
-      return object : FrameHandler {
-        override fun handle(image: BufferedImage) {
-          val expected = File("src/test/resources/${snapshot.name}.png")
-          ImageUtils.assertImageSimilar(
-            relativePath = expected.path,
-            image = image,
-            goldenImage = ImageIO.read(expected),
-            maxPercentDifferent = 0.1
-          )
-        }
-
-        override fun close() = Unit
+    override fun handleSnapshot(viewSnapshot: ViewSnapshot, testRecord: TestRecord) {
+      val expected = File("src/test/resources/${testRecord.name}.png")
+      val image = runBlocking {
+        viewSnapshot.imageFlow.first()
       }
+      ImageUtils.assertImageSimilar(
+        relativePath = expected.path,
+        image = image,
+        goldenImage = ImageIO.read(expected),
+        maxPercentDifferent = 0.1
+      )
     }
 
     override fun close() = Unit

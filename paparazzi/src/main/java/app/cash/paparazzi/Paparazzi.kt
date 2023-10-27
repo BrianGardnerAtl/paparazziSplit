@@ -3,6 +3,11 @@ package app.cash.paparazzi
 import android.view.View
 import androidx.annotation.LayoutRes
 import androidx.compose.runtime.Composable
+import app.cash.paparazzi.test.HtmlReportWriter
+import app.cash.paparazzi.test.SnapshotHandler
+import app.cash.paparazzi.test.SnapshotVerifier
+import app.cash.paparazzi.test.TestName
+import app.cash.paparazzi.test.TestRecord
 import com.android.ide.common.rendering.api.SessionParams
 import org.junit.rules.TestRule
 import org.junit.runner.Description
@@ -22,7 +27,7 @@ class Paparazzi @JvmOverloads constructor(
   private val maxPercentDifference: Double = 0.1,
   private val snapshotHandler: SnapshotHandler = determineHandler(maxPercentDifference)
 ) : TestRule {
-  private val paparazzi = PaparazziSdk(
+  private val paparazziSdk = PaparazziSdk(
     environment,
     deviceConfig,
     theme,
@@ -50,55 +55,53 @@ class Paparazzi @JvmOverloads constructor(
   }
 
   val context
-    get() = paparazzi.context
+    get() = paparazziSdk.context
   val resources
-    get() = paparazzi.resources
+    get() = paparazziSdk.resources
   val layoutInflater
-    get() = paparazzi.layoutInflater
+    get() = paparazziSdk.layoutInflater
 
-  fun <V : View> inflate(@LayoutRes layoutId: Int): V = paparazzi.inflate(layoutId)
+  fun <V : View> inflate(@LayoutRes layoutId: Int): V = paparazziSdk.inflate(layoutId)
 
   fun unsafeUpdateConfig(
     deviceConfig: DeviceConfig? = null,
     theme: String? = null,
     renderingMode: SessionParams.RenderingMode? = null
-  ) = paparazzi.unsafeUpdateConfig(deviceConfig, theme, renderingMode)
+  ) = paparazziSdk.unsafeUpdateConfig(deviceConfig, theme, renderingMode)
 
   fun snapshot(name: String? = null, composable: @Composable () -> Unit) {
-    setupFrameHandler(name, -1, 1)
-    paparazzi.snapshot(composable)
+    val deviceSnapshot = DeviceSnapshot(paparazziSdk)
+    val testRecord = createTestRecord(name)
+    snapshotHandler.handleSnapshot(deviceSnapshot.snapshot(composable), testRecord)
   }
 
   @JvmOverloads
   fun snapshot(view: View, name: String? = null, offsetMillis: Long = 0L) {
-    setupFrameHandler(name, -1, 1)
-    paparazzi.snapshot(view, offsetMillis)
+    val deviceSnapshot = DeviceSnapshot(paparazziSdk)
+    val testRecord = createTestRecord(name)
+    snapshotHandler.handleSnapshot(deviceSnapshot.snapshot(view, offsetMillis), testRecord)
   }
 
   @JvmOverloads
   fun gif(view: View, name: String? = null, start: Long = 0L, end: Long = 500L, fps: Int = 30) {
-    // Add one to the frame count so we get the last frame. Otherwise a 1 second, 60 FPS animation
-    // our 60th frame will be at time 983 ms, and we want our last frame to be 1,000 ms. This gets
-    // us 61 frames for a 1 second animation, 121 frames for a 2 second animation, etc.
-    val durationMillis = (end - start).toInt()
-    val frameCount = (durationMillis * fps) / 1000 + 1
-    setupFrameHandler(name, frameCount, fps)
-    paparazzi.gif(view, start, end, fps)
+    val gifSnapshot = GifSnapshot(paparazziSdk)
+    val testRecord = createTestRecord(name)
+    snapshotHandler.handleSnapshot(gifSnapshot.snapshot(view, start, end, fps), testRecord)
   }
+
+  private fun createTestRecord(name: String?) = TestRecord(
+    name = name,
+    testName = testName!!,
+    timestamp = Date()
+  )
 
   private fun prepare(description: Description) {
     testName = description.toTestName()
-    paparazzi.prepare()
+    paparazziSdk.prepare()
   }
 
   private fun close() {
-    paparazzi.close()
-  }
-
-  private fun setupFrameHandler(name: String? = null, frameCount: Int, fps: Int) {
-    val snapshot = Snapshot(name, testName!!, Date())
-    val frameHandler = snapshotHandler.newFrameHandler(snapshot, frameCount, fps)
-    paparazzi.setFrameHandler(frameHandler)
+    paparazziSdk.close()
   }
 
   private fun Description.toTestName(): TestName {
