@@ -1456,6 +1456,15 @@ class PaparazziPluginTest {
       .runFixture(fixtureRoot) { build() }
   }
 
+  @Test
+  fun imageHash() {
+    val fixtureRoot = File("src/test/projects/image-hash")
+
+    gradleRunner
+      .withArguments("testDebug", "--stacktrace")
+      .runFixture(fixtureRoot) { build() }
+  }
+
   private fun File.loadConfig() = source().buffer().use { CONFIG_ADAPTER.fromJson(it)!! }
 
   private fun GradleRunner.runFixture(
