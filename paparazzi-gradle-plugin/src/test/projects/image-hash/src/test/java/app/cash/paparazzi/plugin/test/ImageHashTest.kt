@@ -24,6 +24,8 @@ class ImageHashTest {
 
   @Test
   fun verticalLineComponentTest() {
+    println()
+    println("Vertical")
     paparazzi.snapshot {
       VerticalLineComponent()
     }
@@ -31,6 +33,8 @@ class ImageHashTest {
 
   @Test
   fun horizontalLineComponentTest() {
+    println()
+    println("Horizontal")
     paparazzi.snapshot {
       HorizontalLineComponent()
     }
@@ -38,7 +42,26 @@ class ImageHashTest {
 
   @Test
   fun squareComponentTest() {
+    println()
+    println("Square")
     paparazzi.snapshot {
+      SquareComponent()
+    }
+  }
+
+  @Test
+  fun multiSnapshot() {
+    println()
+    println("Multi snapshot")
+    paparazzi.snapshot(name = "multi_vertical") {
+      VerticalLineComponent()
+    }
+
+    paparazzi.snapshot(name = "multi_horizontal") {
+      HorizontalLineComponent()
+    }
+
+    paparazzi.snapshot(name = "multi_square") {
       SquareComponent()
     }
   }

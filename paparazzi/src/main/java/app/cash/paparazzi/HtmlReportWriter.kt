@@ -101,17 +101,23 @@ public class HtmlReportWriter @JvmOverloads constructor(
       }
 
       override fun close() {
+        println("Close frame handler")
         if (hashes.isEmpty()) return
         writer.close()
         val snapshotFile = File(snapshotDir, "${hash(hashes)}.png")
+        println("Have snapshot file $snapshotFile")
+        println("Have original snapshot tmp file ${snapshotTmpFile.toJsonPath()}")
         snapshotTmpFile.renameTo(snapshotFile)
         snapshotTmpFile.delete()
 
         if (isRecording) {
-          val goldenFile = File(goldenDir, snapshot.toFileName("_", "png"))
+          val filename = snapshot.toFileName("_", "png")
+          println("Have filename $filename")
+          val goldenFile = File(goldenDir, filename)
           snapshotFile.copyTo(target = goldenFile, overwrite = true)
         }
 
+        println("Update snapshot file to ${snapshotFile.toJsonPath()}")
         shots += snapshot.copy(file = snapshotFile.toJsonPath())
       }
     }
@@ -121,17 +127,15 @@ public class HtmlReportWriter @JvmOverloads constructor(
   private fun hash(image: BufferedImage): String {
     val hashingSink = HashingSink.sha1(blackholeSink())
     hashingSink.buffer().use { sink ->
-      // write image dimensions to avoid views with the same contents but different dimensions
-      // causing a hash collision.
-      sink.writeInt(image.width)
-      sink.writeInt(image.height)
       for (y in 0 until image.height) {
         for (x in 0 until image.width) {
           sink.writeInt(image.getRGB(x, y))
         }
       }
     }
-    return hashingSink.hash.hex()
+    val hex = hashingSink.hash.hex()
+    println("Have hex $hex")
+    return hex
   }
 
   /** Returns a SHA-1 hash of [lines]. */
@@ -143,7 +147,9 @@ public class HtmlReportWriter @JvmOverloads constructor(
         sink.writeUtf8("\n")
       }
     }
-    return hashingSink.hash.hex()
+    val hex = hashingSink.hash.hex()
+    println("Have lines hex: $hex")
+    return hex
   }
 
   /** Release all resources and block until everything has been written to the file system. */
