@@ -19,6 +19,7 @@ import app.cash.paparazzi.SnapshotHandler.FrameHandler
 import app.cash.paparazzi.internal.PaparazziJson
 import app.cash.paparazzi.internal.apng.ApngWriter
 import com.google.common.base.CharMatcher
+import com.google.common.io.Files
 import okio.BufferedSink
 import okio.HashingSink
 import okio.Path.Companion.toPath
@@ -101,23 +102,22 @@ public class HtmlReportWriter @JvmOverloads constructor(
       }
 
       override fun close() {
-        println("Close frame handler")
+        // Do nothing if there are no images
         if (hashes.isEmpty()) return
+        // Write the actual png images to the system upon closing APNGWriter
         writer.close()
+        // Create a unique file to copy things to
         val snapshotFile = File(snapshotDir, "${hash(hashes)}.png")
-        println("Have snapshot file $snapshotFile")
-        println("Have original snapshot tmp file ${snapshotTmpFile.toJsonPath()}")
-        snapshotTmpFile.renameTo(snapshotFile)
-        snapshotTmpFile.delete()
+        snapshotFile.createNewFile()
+        Files.move(snapshotTmpFile, snapshotFile)
+        val deleted = snapshotTmpFile.delete()
 
         if (isRecording) {
           val filename = snapshot.toFileName("_", "png")
-          println("Have filename $filename")
           val goldenFile = File(goldenDir, filename)
           snapshotFile.copyTo(target = goldenFile, overwrite = true)
         }
 
-        println("Update snapshot file to ${snapshotFile.toJsonPath()}")
         shots += snapshot.copy(file = snapshotFile.toJsonPath())
       }
     }
@@ -133,9 +133,7 @@ public class HtmlReportWriter @JvmOverloads constructor(
         }
       }
     }
-    val hex = hashingSink.hash.hex()
-    println("Have hex $hex")
-    return hex
+    return hashingSink.hash.hex()
   }
 
   /** Returns a SHA-1 hash of [lines]. */
@@ -147,9 +145,7 @@ public class HtmlReportWriter @JvmOverloads constructor(
         sink.writeUtf8("\n")
       }
     }
-    val hex = hashingSink.hash.hex()
-    println("Have lines hex: $hex")
-    return hex
+    return hashingSink.hash.hex()
   }
 
   /** Release all resources and block until everything has been written to the file system. */
