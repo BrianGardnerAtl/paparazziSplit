@@ -37,8 +37,8 @@ class HtmlReportWriterTest {
   val snapshotRoot: TemporaryFolder = TemporaryFolder()
 
   private val anyImage = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-  private val anyImageHash = "2ef6a6e795a2b8cffabefb6d9a2066a183c8e3b6"
-  private val anyVideoHash = "7325996fabd92c7411c0d03ed62641323ffdf0d1"
+  private val anyImageHash = "a7414bdf48bdd2e58117371848242e4116826e32"
+  private val anyVideoHash = "dfeb78098217ee4f9a307645c83a7804a6a7f7d7"
 
   @Test
   fun happyPathImages() {
@@ -333,6 +333,70 @@ class HtmlReportWriterTest {
       assertThat(firstSnapshot.pixelEqual(secondSnapshot)).isFalse()
       assertThat(firstSnapshot.pixelEqual(thirdSnapshot)).isFalse()
       assertThat(secondSnapshot.pixelEqual(thirdSnapshot)).isFalse()
+    } finally {
+      // reset record mode
+      System.setProperty("paparazzi.test.record", "false")
+    }
+  }
+
+  @Test
+  fun similarImagesProduceDifferentReportFiles() {
+    try {
+      // set record mode
+      System.setProperty("paparazzi.test.record", "true")
+
+      val horizontal = ImageIO.read(File("src/test/resources/horizontal.png"))
+      val convertedHorizontal = horizontal.convertImage()
+      val vertical = ImageIO.read(File("src/test/resources/vertical.png"))
+      val convertedVertical = vertical.convertImage()
+      val square = ImageIO.read(File("src/test/resources/square.png"))
+      val convertedSquare = square.convertImage()
+      val htmlReportWriter = HtmlReportWriter("record_run", reportRoot.root, snapshotRoot.root)
+
+      htmlReportWriter.use {
+        val horizontalFrameHandler = htmlReportWriter.newFrameHandler(
+          Snapshot(
+            name = "horizontal",
+            testName = TestName("app.cash.paparazzi", "SimilarViews", "horizontal"),
+            timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate(),
+            tags = listOf("redesign")
+          ),
+          frameCount = 1,
+          fps = -1
+        )
+        horizontalFrameHandler.use {
+          horizontalFrameHandler.handle(convertedHorizontal)
+        }
+        val verticalFrameHandler = htmlReportWriter.newFrameHandler(
+          Snapshot(
+            name = "loading",
+            testName = TestName("app.cash.paparazzi", "SimilarViews", "vertical"),
+            timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate(),
+            tags = listOf("redesign")
+          ),
+          frameCount = 1,
+          fps = -1
+        )
+        verticalFrameHandler.use {
+          verticalFrameHandler.handle(convertedVertical)
+        }
+        val squareFrameHandler = htmlReportWriter.newFrameHandler(
+          Snapshot(
+            name = "loading",
+            testName = TestName("app.cash.paparazzi", "SimilarViews", "square"),
+            timestamp = Instant.parse("2019-03-20T10:27:43Z").toDate(),
+            tags = listOf("redesign")
+          ),
+          frameCount = 1,
+          fps = -1
+        )
+        squareFrameHandler.use {
+          squareFrameHandler.handle(convertedSquare)
+        }
+      }
+      // Verify that there are 3 files in the reports/paparazzi/images file
+      // This should confirm that the snapshot images used in the test report are correct
+      assertThat(File(reportRoot.root, "images").listFiles()!!.size).isEqualTo(3)
     } finally {
       // reset record mode
       System.setProperty("paparazzi.test.record", "false")
